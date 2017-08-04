@@ -105,3 +105,6 @@ ENV/
 
 #tensorboard
 runs/
+
+#my
+data/
