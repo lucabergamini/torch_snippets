@@ -12,6 +12,10 @@ from torchvision.utils import make_grid
 from torch.utils.data import DataLoader, TensorDataset, Dataset
 import progressbar
 
+CHARS = ['\n', ' ', '!', '"', "'", '(', ')', '*', ',', '-', '.', ':', ';', '?', '[', ']', '_', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+FILL_CHAR = ' '
+features_size = len(CHARS)
+
 def to_categorical(y, num_classes=None):
     """Converts a class vector (integers) to binary class matrix.
     E.g. for use with categorical_crossentropy.
@@ -37,22 +41,23 @@ def text_to_numpy(text_name,seq_len=20):
     #lego file
     text = f.read()
     #tolgo roba inutile
-    text = text.replace("\n","")
-    text = text.replace("\t","")
+    text = text.replace("\n"," ")
+    text = text.replace("\t"," ")
+    text = text.lower()
 
     i = 0
     #preparo spazio dati finali
-    data = numpy.zeros((len(text)/seq_len,seq_len,91))
+    data = numpy.zeros((len(text)/seq_len,seq_len,features_size))
     while True:
         #provo a prendere seq_len caratteri
         token = text[i*seq_len:(i)*seq_len+seq_len]
         #se non riesco ho finito
         if len(token) < seq_len:
             break
-        #sostituisco ogni lettera con ASCII-32 (spazio primo carattere utile)
-        token = numpy.asarray([ ord(c) for c in token]) - 32
+        #sostituisco ogni lettera con codice
+        token = numpy.asarray([ CHARS.index(c) if c in CHARS else CHARS.index(FILL_CHAR) for c in token])
         #trasformo in one-hot
-        token = to_categorical(token,num_classes=91)
+        token = to_categorical(token,num_classes=features_size)
         #aggiorno data
         data[i] = token
         i+=1
@@ -81,8 +86,8 @@ class dataMultiplier(object):
         #prende dato
         data_raw = sample["data"]
         i = 0
-        data = numpy.zeros((len(data_raw) , self.seq_len, 91))
-        labels = numpy.zeros((len(data_raw), self.label_len, 91))
+        data = numpy.zeros((len(data_raw) , self.seq_len, features_size))
+        labels = numpy.zeros((len(data_raw), self.label_len, features_size))
         while True:
             #prende dato e label
             token = data_raw[i:i+self.seq_len]
@@ -103,10 +108,10 @@ class dataMultiplier(object):
 class Net(nn.Module):
     def __init__(self):
         super(Net,self).__init__()
-        self.bn1 = nn.BatchNorm1d(num_features=91)
-        self.lstm = nn.LSTM(input_size=91,hidden_size=256,num_layers=1,batch_first=True,dropout=0.2)
+        self.bn1 = nn.BatchNorm1d(num_features=features_size)
+        self.lstm = nn.LSTM(input_size=features_size,hidden_size=256,num_layers=1,batch_first=True,dropout=0.2)
         self.bn2 = nn.BatchNorm1d(num_features=256)
-        self.fc2 = nn.Linear(in_features=256,out_features=91)
+        self.fc2 = nn.Linear(in_features=256,out_features=features_size)
 
     def forward(self,i):
         #devo girare i per bn
@@ -131,12 +136,12 @@ def classification_accuracy(out, labels):
     return accuracy
 
 
-net = Net().cuda()
+net = Net()
 
 writer = SummaryWriter('runs/'+datetime.now().strftime('%B%d  %H:%M:%S'))
 
 data = text_to_numpy("data/text_1",seq_len=51)
-loader = DataLoader(MyDataset(data,transform=dataMultiplier(seq_len=50,label_len=1)),batch_size=128,shuffle=True)
+loader = DataLoader(MyDataset(data,transform=dataMultiplier(seq_len=50,label_len=1)),batch_size=64,shuffle=True)
 
 # net = net.cuda()
 optimizer = Adam(params=net.parameters(), lr=0.01)
@@ -169,8 +174,8 @@ for i in xrange(num_epochs):
         #tolgo one-hot
         labels_batch = torch.max(labels_batch,1)[1]
         #trasofrmo in variabili
-        data_batch = Variable(data_batch.cuda(), requires_grad=True)
-        labels_batch = Variable(labels_batch.long().cuda())
+        data_batch = Variable(data_batch, requires_grad=True)
+        labels_batch = Variable(labels_batch.long())
         # calcolo uscita
         out = net(data_batch)
         #calcolo loss
@@ -199,18 +204,17 @@ for i in xrange(num_epochs):
 
         if j % logging_text_step == 0:
             # STEP
-            s = "Non sopporto i giovani impertinenti che non cedono il posto ai vecchi in autobus"[0:50]
+            s = "the cry was so horrible in its agony that the frig"[0:50]
             s_final = s
-            s = numpy.asarray([ord(c) for c in s]) - 32
-            s = to_categorical(s, num_classes=91)
+            s = numpy.asarray([CHARS.index(c) if c in CHARS else CHARS.index(FILL_CHAR) for c in s])
+            s = to_categorical(s, num_classes=features_size)
             for k in xrange(50):
-                c = net(Variable(torch.FloatTensor(s[numpy.newaxis,...])).cuda()).cpu().data.numpy()
+                c = net(Variable(torch.FloatTensor(s[numpy.newaxis,...]))).cpu().data.numpy()
                 c = numpy.where(c < numpy.max(c),0,1)
-
                 s = numpy.append(s,c,0)
                 s = s[1:]
-                c = (numpy.argmax(c,1)+32)[0]
-                s_final += str(unichr(c))
+                c = numpy.argmax(c,1)[0]
+                s_final += CHARS[c]
 
             writer.add_text("text_sample",s_final,i * batch_number + j)
     progress.finish()
