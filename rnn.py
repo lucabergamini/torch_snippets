@@ -35,73 +35,33 @@ def to_categorical(y, num_classes=None):
     return categorical
 
 
-def text_to_numpy(text_name,seq_len=20):
-    #apro file
-    f = open(text_name,"r")
-    #lego file
-    text = f.read()
-    #tolgo roba inutile
-    text = text.replace("\n"," ")
-    text = text.replace("\t"," ")
-    text = text.lower()
-
-    i = 0
-    #preparo spazio dati finali
-    data = numpy.zeros((len(text)/seq_len,seq_len,features_size))
-    while True:
-        #provo a prendere seq_len caratteri
-        token = text[i*seq_len:(i)*seq_len+seq_len]
-        #se non riesco ho finito
-        if len(token) < seq_len:
-            break
-        #sostituisco ogni lettera con codice
-        token = numpy.asarray([ CHARS.index(c) if c in CHARS else CHARS.index(FILL_CHAR) for c in token])
-        #trasformo in one-hot
-        token = to_categorical(token,num_classes=features_size)
-        #aggiorno data
-        data[i] = token
-        i+=1
-    #per sicurezza di non avere roba in piu tutta a 0
-    data = data[:i]
-    return data
 
 class MyDataset(Dataset):
-    def __init__(self,data,transform):
-        self.data = data
-        self.len = len(data)
-        self.transform = transform
+    def __init__(self,text_path,input_len,output_len):
+        # lego file
+        self.text = open(text_path, "r").read()
+        # tolgo roba inutile
+        self.text = self.text.replace("\n", " ")
+        self.text = self.text.replace("\t", " ")
+        self.text = self.text.lower()
+
+        self.input_len = input_len
+        self.output_len = output_len
+        #TODO check this
+        self.len = len(self.text) - (self.input_len+self.output_len)
     def __len__(self):
         return self.len
     def __getitem__(self, item):
-        sample = {"data":self.data[item],"label":0}
-        return self.transform(sample)
+        # provo a prendere seq_len caratteri
+        token = self.text[item :item  + self.input_len+self.output_len]
+        assert len(token) == self.input_len + self.output_len
+        # sostituisco ogni lettera con codice
+        token = numpy.asarray([CHARS.index(c) if c in CHARS else CHARS.index(FILL_CHAR) for c in token])
+        # trasformo in one-hot
+        token = to_categorical(token, num_classes=features_size)
 
-class dataMultiplier(object):
-
-    def __init__(self,seq_len=10,label_len = 1):
-        self.seq_len = seq_len
-        self.label_len = label_len
-
-    def __call__(self, sample):
-        #prende dato
-        data_raw = sample["data"]
-        i = 0
-        data = numpy.zeros((len(data_raw) , self.seq_len, features_size))
-        labels = numpy.zeros((len(data_raw), self.label_len, features_size))
-        while True:
-            #prende dato e label
-            token = data_raw[i:i+self.seq_len]
-            label = data_raw[i+self.seq_len:i+self.seq_len+self.label_len]
-            #se non riesce ho finito
-            if len(token) < self.seq_len or len(label) < self.label_len:
-                break
-            data[i] = token
-            labels[i] = label
-            i +=1
-        data = data[:i]
-        labels = labels[:i]
-        return {"data":data,"label":labels}
-
+        sample = {"data":token[:self.input_len],"label":token[-self.output_len:]}
+        return sample
 
 
 
@@ -140,15 +100,13 @@ net = Net()
 
 writer = SummaryWriter('runs/'+datetime.now().strftime('%B%d  %H:%M:%S'))
 
-data = text_to_numpy("data/text_1",seq_len=51)
-loader = DataLoader(MyDataset(data,transform=dataMultiplier(seq_len=50,label_len=1)),batch_size=64,shuffle=True)
+loader = DataLoader(MyDataset("data/text_1",input_len=50,output_len=1),batch_size=64,shuffle=True)
 
 # net = net.cuda()
 optimizer = Adam(params=net.parameters(), lr=0.01)
 
 # loss
 loss = nn.NLLLoss()
-
 batch_number = len(loader)
 num_epochs = 200
 logging_step = 50
@@ -169,8 +127,8 @@ for i in xrange(num_epochs):
         optimizer.zero_grad()
         net.zero_grad()
         #reshape
-        data_batch = sample["data"].view(-1,sample["data"].size()[2],sample["data"].size()[3]).float()
-        labels_batch = sample["label"].view(-1,sample["label"].size()[3]).float()
+        data_batch = sample["data"].float()
+        labels_batch = torch.squeeze(sample["label"])
         #tolgo one-hot
         labels_batch = torch.max(labels_batch,1)[1]
         #trasofrmo in variabili
