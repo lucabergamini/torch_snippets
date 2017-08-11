@@ -14,6 +14,9 @@ from torch.utils.data import DataLoader, TensorDataset
 import cPickle
 import progressbar
 
+torch.manual_seed(6)
+torch.cuda.manual_seed(6)
+numpy.random.seed(6)
 
 class Conv_block(nn.Module):
     def __init__(self, in_ch, out_ch, k_size, stride=1, pool=3):
@@ -39,12 +42,12 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         self.fc1 = nn.Linear(in_features=100,out_features=64*7*7)
         self.bn1 = nn.BatchNorm1d(num_features=64*7*7)
-        self.bn2 = nn.BatchNorm2d(num_features=32)
-        self.deconv_0 = nn.ConvTranspose2d(in_channels=64, out_channels=32, kernel_size=2, stride=2)
+        self.bn2 = nn.BatchNorm2d(num_features=64)
+        self.deconv_0 = nn.ConvTranspose2d(in_channels=64, out_channels=64, kernel_size=2, stride=2)
 
-        self.deconv_1 = nn.ConvTranspose2d(in_channels=32, out_channels=32, kernel_size=2, stride=2)
-        self.conv1 = nn.Conv2d(in_channels=32,out_channels=16,kernel_size=3,stride=1,padding=1)
-        self.conv2 = nn.Conv2d(in_channels=16,out_channels=1,kernel_size=3,stride=1,padding=1)
+        self.deconv_1 = nn.ConvTranspose2d(in_channels=64, out_channels=64, kernel_size=2, stride=2)
+        self.conv1 = nn.Conv2d(in_channels=64,out_channels=32,kernel_size=3,stride=1,padding=1)
+        self.conv2 = nn.Conv2d(in_channels=32,out_channels=1,kernel_size=3,stride=1,padding=1)
         # self.deconv_2 = nn.ConvTranspose2d(in_channels=32, out_channels=32, kernel_size=2, stride=2)
         # self.deconv_3 = nn.ConvTranspose2d(in_channels=32, out_channels=4, kernel_size=3, stride=1)
         # self.deconv_4 = nn.ConvTranspose2d(in_channels=4, out_channels=1, kernel_size=4, stride=1)
@@ -75,22 +78,20 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
 
-        self.add_module("conv_0", Conv_block(1, 20, 2))
-        self.add_module("conv_1", Conv_block(20, 32, 2))
-
-        self.fc1 = nn.Linear(in_features=128, out_features=64)
-        self.fc2 = nn.Linear(in_features=64, out_features=32)
-        self.fc3 = nn.Linear(in_features=32, out_features=2)
+        self.add_module("conv_0", Conv_block(1, 64, 3,pool=3))
+        self.add_module("conv_1", Conv_block(64, 128, 3,pool=3))
+        self.fc1 = nn.Linear(in_features=512, out_features=256)
+        self.dp1 = nn.Dropout(0.30)
+        self.fc2 = nn.Linear(in_features=256, out_features=2)
 
     def forward(self, i):
         i = self.conv_0(i)
         i = self.conv_1(i)
         i = i.view(len(i), -1)
         i = self.fc1(i)
+        i = self.dp1(i)
         i = F.relu(i)
         i = self.fc2(i)
-        i = F.relu(i)
-        i = self.fc3(i)
         i = F.log_softmax(i)
         return i
 
@@ -141,8 +142,8 @@ def classification_accuracy(out, labels):
 
 writer = SummaryWriter('runs/' + datetime.now().strftime('%B%d  %H:%M:%S'))
 net = Net()
-# net = net.cuda()
-optimizer_discriminator = SGD(params=net.discriminator.parameters(), lr=0.1, momentum=0.85)
+net = net.cuda()
+optimizer_discriminator = SGD(params=net.discriminator.parameters(), lr=0.05, momentum=0.90)
 optimizer_generator = Adam(params=net.generator.parameters(), lr=0.001)
 # definisco input da numpy
 train_raw, _, test_raw = cPickle.load(open("data/mnist.pkl"))
@@ -159,12 +160,13 @@ loss = nn.NLLLoss()
 # due grafi?
 # net.batch_real = True
 # writer.add_graph(net, net(Variable(torch.FloatTensor(data_train[0:1]), requires_grad=True)))
+net.train(False)
 net.batch_real = False
-writer.add_graph(net, net(Variable(torch.randn(1,100), requires_grad=True)))
+writer.add_graph(net, net(Variable(torch.randn(1,100), requires_grad=True).cuda()))
 
 batch_number = len(loader)
-num_epochs = 1
-num_pretrain = 15
+num_epochs = 10
+num_epochs_pretrain = 4
 logging_step = 50
 logging_image_step = 25
 widgets = [
@@ -178,50 +180,53 @@ widgets = [
     ' ', progressbar.DynamicMessage('accuracy_generator'),
 ]
 #PRETRAIN DISCRIMINATOR
-# print "PRETRAIN DISCRIMINATOR"
-#
-# progress = progressbar.ProgressBar(min_value=0, max_value=num_pretrain, initial_value=0, widgets=widgets).start()
-# for i in xrange(num_pretrain):
-#     (data_batch, labels_batch) = loader.__iter__().next()
-#     # REAL
-#     net.batch_real = True
-#     # trasformo in variabili
-#     data_batch = Variable(data_batch, requires_grad=True)
-#     # calcolo uscita
-#     out_real = net(data_batch)
-#     # FAKE
-#     net.batch_real = False
-#     # genero rumore
-#     data_batch = Variable(torch.randn(len(data_batch), 64, 1, 1), requires_grad=True)
-#     # calcolo uscita
-#     out_fake = net(data_batch)
-#     # concateno
-#     out_cat = torch.cat((out_real, out_fake), 0)
-#     labels_cat = torch.cat((Variable(torch.ones(labels_batch.size())), Variable(torch.zeros(labels_batch.size()))),
-#                            0).long()
-#     labels_cat_reverse = labels_cat.clone()
-#     labels_cat_reverse[labels_cat == 0] = 1
-#     labels_cat_reverse[labels_cat == 1] = 0
-#     # LOSS
-#     loss_discriminator = loss(out_cat, labels_cat)
-#     # accuracy
-#     accuracy_discriminator = classification_accuracy(out_cat, labels_cat)
-#     # BACKPROP
-#     optimizer_discriminator.zero_grad()
-#     net.zero_grad()
-#     loss_discriminator.backward(retain_graph=True)
-#     optimizer_discriminator.step()
-#
-#     # LOGGING
-#     progress.update(progress.value + 1,
-#                     loss_discriminator=loss_discriminator.data.cpu().numpy()[0],
-#                     accuracy_discriminator=accuracy_discriminator.data.cpu().numpy()[0],
-#                     )
-#
-#     # LOSS ACCURACY
-#     writer.add_scalar('pretrain_loss_discriminator', loss_discriminator.data[0], i)
-#     writer.add_scalar('pretrain_accuracy_discriminator', accuracy_discriminator.data[0], i)
-# progress.finish()
+print "PRETRAIN DISCRIMINATOR"
+
+for i in xrange(num_epochs_pretrain):
+    progress = progressbar.ProgressBar(min_value=0, max_value=batch_number, initial_value=0,
+                                       widgets=widgets).start()
+
+    for j,(data_batch,labels_batch) in enumerate(loader):
+        net.train(True)
+        # REAL
+        net.batch_real = True
+        # trasformo in variabili
+        data_batch = Variable(data_batch, requires_grad=True).cuda()
+        # calcolo uscita
+        out_real = net(data_batch)
+        # FAKE
+        net.batch_real = False
+        # genero rumore
+        data_batch = Variable(torch.randn(len(data_batch), 100), requires_grad=True).cuda()
+        # calcolo uscita
+        out_fake = net(data_batch)
+        # concateno
+        out_cat = torch.cat((out_real, out_fake), 0)
+        labels_cat = torch.cat((Variable(torch.ones(labels_batch.size())).cuda(), Variable(torch.zeros(labels_batch.size())).cuda()),
+                               0).long()
+        labels_cat_reverse = labels_cat.clone()
+        labels_cat_reverse[labels_cat == 0] = 1
+        labels_cat_reverse[labels_cat == 1] = 0
+        # LOSS
+        loss_discriminator = loss(out_cat, labels_cat)
+        # accuracy
+        accuracy_discriminator = classification_accuracy(out_cat, labels_cat)
+        # BACKPROP
+        optimizer_discriminator.zero_grad()
+        net.zero_grad()
+        loss_discriminator.backward(retain_graph=True)
+        optimizer_discriminator.step()
+
+        # LOGGING
+        progress.update(progress.value + 1,
+                        loss_discriminator=loss_discriminator.data.cpu().numpy()[0],
+                        accuracy_discriminator=accuracy_discriminator.data.cpu().numpy()[0],
+                        )
+
+        # LOSS ACCURACY
+        writer.add_scalar('pretrain_loss_discriminator', loss_discriminator.data[0], i)
+        writer.add_scalar('pretrain_accuracy_discriminator', accuracy_discriminator.data[0], i)
+    progress.finish()
 
 #print "JOINT TRAIN"
 for i in xrange(num_epochs):
@@ -232,18 +237,19 @@ for i in xrange(num_epochs):
         # REAL
         net.batch_real = True
         # trasformo in variabili
-        data_batch = Variable(data_batch, requires_grad=True)
+        data_batch = Variable(data_batch, requires_grad=True).cuda()
         # calcolo uscita
         out_real = net(data_batch)
         # FAKE
         net.batch_real = False
         # genero rumore
-        data_batch = Variable(torch.randn(len(data_batch),100), requires_grad=True)
+        noise_len= numpy.random.randint(4,len(data_batch)*2)
+        data_batch = Variable(torch.randn(noise_len,100), requires_grad=True).cuda()
         # calcolo uscita
         out_fake = net(data_batch)
         # concateno
         out_cat = torch.cat((out_real, out_fake), 0)
-        labels_cat = torch.cat((Variable(torch.ones(labels_batch.size())), Variable(torch.zeros(labels_batch.size()))),
+        labels_cat = torch.cat((Variable(torch.ones(labels_batch.size())).cuda(), Variable(torch.zeros(noise_len)).cuda()),
                                0).long()
         labels_cat_reverse = labels_cat.clone()
         labels_cat_reverse[labels_cat == 0] = 1
@@ -285,9 +291,9 @@ for i in xrange(num_epochs):
                 writer.add_histogram(name, param.clone().cpu().data.numpy(), i * batch_number + j)
                 # IMGS
         if j % logging_image_step == 0:
-            net.train(True)
+            net.train(False)
             # genero rumore
-            data_batch = Variable(torch.randn(len(data_batch), 100), requires_grad=False)
+            data_batch = Variable(torch.randn(len(data_batch), 100), requires_grad=False).cuda()
             # calcolo uscita
             net(data_batch)
             for (name, imgs) in net.imgs.iteritems():

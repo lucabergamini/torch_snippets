@@ -41,7 +41,7 @@ class MyDataset(Dataset):
         # lego file
         self.text = open(text_path, "r").read()
         # tolgo roba inutile
-        self.text = self.text.replace("\n", " ")
+        #self.text = self.text.replace("\n", " ")
         self.text = self.text.replace("\t", " ")
         self.text = self.text.lower()
 
@@ -59,7 +59,6 @@ class MyDataset(Dataset):
         token = numpy.asarray([CHARS.index(c) if c in CHARS else CHARS.index(FILL_CHAR) for c in token])
         # trasformo in one-hot
         token = to_categorical(token, num_classes=features_size)
-
         sample = {"data":token[:self.input_len],"label":token[-self.output_len:]}
         return sample
 
@@ -69,9 +68,9 @@ class Net(nn.Module):
     def __init__(self):
         super(Net,self).__init__()
         self.bn1 = nn.BatchNorm1d(num_features=features_size)
-        self.lstm = nn.LSTM(input_size=features_size,hidden_size=256,num_layers=1,batch_first=True,dropout=0.2)
-        self.bn2 = nn.BatchNorm1d(num_features=256)
-        self.fc2 = nn.Linear(in_features=256,out_features=features_size)
+        self.lstm = nn.LSTM(input_size=features_size,hidden_size=256,num_layers=1,batch_first=True)
+        self.fc1 = nn.Linear(in_features=256,out_features=64)
+        self.fc2 = nn.Linear(in_features=64,out_features=features_size)
 
     def forward(self,i):
         #devo girare i per bn
@@ -80,11 +79,11 @@ class Net(nn.Module):
         #i = i.transpose(1,2)
         i,_ = self.lstm(i)
         i = i[:,-1]
-        #i = self.fc1(i)
-        #i = F.relu(i)
-        #i = F.dropout(i,0.35)
+        i = self.fc1(i)
+        i = F.dropout(i,0.55)
+        i = F.relu(i)
         i = self.fc2(i)
-
+        i = F.dropout(i,0.35)
         i = F.log_softmax(i)
         return i
 
@@ -96,22 +95,24 @@ def classification_accuracy(out, labels):
     return accuracy
 
 
-net = Net()
+net = Net().cuda()
 
 writer = SummaryWriter('runs/'+datetime.now().strftime('%B%d  %H:%M:%S'))
+writer.add_graph(net, net(Variable(torch.rand(1,75,features_size), requires_grad=True).cuda()))
 
-loader = DataLoader(MyDataset("data/text_1",input_len=50,output_len=1),batch_size=64,shuffle=True)
+loader = DataLoader(MyDataset("data/text_1",input_len=75,output_len=1),batch_size=64,shuffle=True)
 
 # net = net.cuda()
-optimizer = Adam(params=net.parameters(), lr=0.01)
+optimizer = Adam(params=net.parameters(), lr=0.001)
 
 # loss
 loss = nn.NLLLoss()
 batch_number = len(loader)
-num_epochs = 200
+num_epochs = 500
 logging_step = 50
-logging_text_step = 50
+logging_text_step = 1000
 widgets = [
+     progressbar.DynamicMessage("epoch"), ' ',
     'Batch: ', progressbar.Counter(),
     '/', progressbar.FormatCustomText('%(total)s', {"total": batch_number}),
     ' ', progressbar.Bar(marker="-", left='[', right=']'),
@@ -122,18 +123,19 @@ widgets = [
 
 for i in xrange(num_epochs):
     progress = progressbar.ProgressBar(min_value=0, max_value=batch_number, initial_value=0, widgets=widgets).start()
-
     for j,sample in enumerate(loader):
+        net.train(True)
+
         optimizer.zero_grad()
         net.zero_grad()
         #reshape
         data_batch = sample["data"].float()
-        labels_batch = torch.squeeze(sample["label"])
+        labels_batch = torch.squeeze(sample["label"],1)
         #tolgo one-hot
         labels_batch = torch.max(labels_batch,1)[1]
         #trasofrmo in variabili
-        data_batch = Variable(data_batch, requires_grad=True)
-        labels_batch = Variable(labels_batch.long())
+        data_batch = Variable(data_batch, requires_grad=True).cuda()
+        labels_batch = Variable(labels_batch.long()).cuda()
         # calcolo uscita
         out = net(data_batch)
         #calcolo loss
@@ -150,6 +152,7 @@ for i in xrange(num_epochs):
         progress.update(progress.value + 1,
                         loss=loss_value.data.cpu().numpy()[0],
                         accuracy=accuracy_value.data.cpu().numpy()[0],
+                        epoch=i+1
                         )
 
         if j % logging_step == 0:
@@ -161,13 +164,14 @@ for i in xrange(num_epochs):
                 writer.add_histogram(name, param.clone().cpu().data.numpy(), i * batch_number + j)
 
         if j % logging_text_step == 0:
+            net.train(False)
             # STEP
-            s = "the cry was so horrible in its agony that the frig"[0:50]
+            s = "non sopporto i giocatori di biliardo, i soprannomi, gli indecisi, i no"[0:75]
             s_final = s
             s = numpy.asarray([CHARS.index(c) if c in CHARS else CHARS.index(FILL_CHAR) for c in s])
             s = to_categorical(s, num_classes=features_size)
-            for k in xrange(50):
-                c = net(Variable(torch.FloatTensor(s[numpy.newaxis,...]))).cpu().data.numpy()
+            for k in xrange(500):
+                c = net(Variable(torch.FloatTensor(s[numpy.newaxis,...])).cuda()).cpu().data.numpy()
                 c = numpy.where(c < numpy.max(c),0,1)
                 s = numpy.append(s,c,0)
                 s = s[1:]
@@ -176,6 +180,5 @@ for i in xrange(num_epochs):
 
             writer.add_text("text_sample",s_final,i * batch_number + j)
     progress.finish()
-
 
 
