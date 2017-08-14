@@ -110,13 +110,13 @@ class N_pairLoss(Module):
         return value
 
 #shuffle false qui e fondamentale
-loader = DataLoader(MNISTSiameseDataset("data/mnist.pkl",classes=[0,1,2,3],num_elements_total=200,num_elements=5),batch_size=4)
+loader = DataLoader(MNISTSiameseDataset("data/mnist.pkl",classes=[i for i in xrange(10)],num_elements_total=500,num_elements=8,epoch_len=1000),batch_size=10)
 net = Net()
 loss = N_pairLoss()
 optimizer = Adam(params=net.parameters(),lr=0.00001)
 #paraetri
 batch_number = len(loader)
-num_epochs = 10
+num_epochs = 50
 logging_step = 50
 logging_image_step = 25
 widgets = [
@@ -157,6 +157,8 @@ for i in xrange(num_epochs):
                         epoch=i+1
                         )
         if j %logging_image_step == 0:
+            net.eval()
+            out = net(Variable(data_batch))
             p = PCA(n_components=3)
             out_pca = p.fit_transform(out.data.cpu().numpy())
 
