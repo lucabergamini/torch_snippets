@@ -60,11 +60,14 @@ class Net(Module):
     def __init__(self):
         super(Net,self).__init__()
         self.bn1 = torch.nn.BatchNorm2d(num_features=1)
-        self.conv1 = torch.nn.Conv2d(in_channels=1,out_channels=64,kernel_size=3)
+        self.conv1 = torch.nn.Conv2d(in_channels=1,out_channels=64,kernel_size=2)
         self.bn2 = torch.nn.BatchNorm2d(num_features=64)
-        self.conv2 = torch.nn.Conv2d(in_channels=64,out_channels=128,kernel_size=3)
-        self.fc1 = torch.nn.Linear(in_features=3200,out_features=512)
-        self.fc2 = torch.nn.Linear(in_features=512,out_features=128)
+        self.conv2 = torch.nn.Conv2d(in_channels=64,out_channels=128,kernel_size=2)
+        self.bn3 = torch.nn.BatchNorm2d(num_features=128)
+        self.conv3 = torch.nn.Conv2d(in_channels=128, out_channels=128, kernel_size=2)
+        self.fc1 = torch.nn.Linear(in_features=512,out_features=256)
+        self.fc2 = torch.nn.Linear(in_features=256,out_features=128)
+        self.fc3 = torch.nn.Linear(in_features=128,out_features=128)
 
 
     def forward(self, i):
@@ -72,14 +75,23 @@ class Net(Module):
         i = self.conv1(i)
         i = F.relu(i)
         i = F.max_pool2d(i,kernel_size=2)
+
         i = self.bn2(i)
         i = self.conv2(i)
         i = F.relu(i)
         i = F.max_pool2d(i,kernel_size=2)
+
+        i = self.bn3(i)
+        i = self.conv3(i)
+        i = F.relu(i)
+        i = F.max_pool2d(i, kernel_size=2)
         i = i.view(len(i),-1)
+
         i = self.fc1(i)
         i = F.relu(i)
         i = self.fc2(i)
+        i = F.relu(i)
+        i = self.fc3(i)
         i = F.tanh(i)
 
         return i
