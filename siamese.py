@@ -65,9 +65,13 @@ class Net(Module):
         self.conv2 = torch.nn.Conv2d(in_channels=64,out_channels=128,kernel_size=2)
         self.bn3 = torch.nn.BatchNorm2d(num_features=128)
         self.conv3 = torch.nn.Conv2d(in_channels=128, out_channels=128, kernel_size=2)
+        self.bn4 = torch.nn.BatchNorm1d(num_features=512)
+        self.do1 = torch.nn.Dropout(p=0.5)
         self.fc1 = torch.nn.Linear(in_features=512,out_features=256)
+        self.bn5 = torch.nn.BatchNorm1d(num_features=256)
         self.fc2 = torch.nn.Linear(in_features=256,out_features=128)
-        self.fc3 = torch.nn.Linear(in_features=128,out_features=128)
+        self.bn6 = torch.nn.BatchNorm1d(num_features=128)
+        self.fc3 = torch.nn.Linear(in_features=128,out_features=3)
 
 
     def forward(self, i):
@@ -87,10 +91,16 @@ class Net(Module):
         i = F.max_pool2d(i, kernel_size=2)
         i = i.view(len(i),-1)
 
+        i = self.bn4(i)
         i = self.fc1(i)
+        #i = self.do1(i)
         i = F.relu(i)
+
+        i = self.bn5(i)
         i = self.fc2(i)
         i = F.relu(i)
+
+        i = self.bn6(i)
         i = self.fc3(i)
         i = F.tanh(i)
 
@@ -122,13 +132,15 @@ class N_pairLoss(Module):
         return value
 
 #shuffle false qui e fondamentale
-loader = DataLoader(MNISTSiameseDataset("data/mnist.pkl",classes=[i for i in xrange(10)],num_elements_total=500,num_elements=8,epoch_len=1000),batch_size=10)
-net = Net()
+#proviamo a cambiare altro
+loader = DataLoader(MNISTSiameseDataset("data/mnist.pkl",classes=[i for i in xrange(10)],num_elements_total=500,num_elements=8,epoch_len=1000),batch_size=5,shuffle=True)
+loader_test = DataLoader(MNISTSiameseDataset("data/mnist.pkl",classes=[i for i in xrange(10)],num_elements_total=500,num_elements=16,epoch_len=10),batch_size=10,shuffle=True)
+net = Net().cuda()
 loss = N_pairLoss()
-optimizer = Adam(params=net.parameters(),lr=0.00001)
+optimizer = Adam(params=net.parameters(),lr=0.00025)
 #paraetri
 batch_number = len(loader)
-num_epochs = 50
+num_epochs = 100
 logging_step = 50
 logging_image_step = 25
 widgets = [
@@ -155,12 +167,12 @@ for i in xrange(num_epochs):
         data_batch = sample["data"].float()
         data_batch = data_batch.view((data_batch.size()[0]*data_batch.size()[1],)+data_batch.size()[2:])
         label_batch = sample["label"]
-        label_batch = Variable(label_batch.view(label_batch.numel()))
+        label_batch = label_batch.view(label_batch.numel())
 
         #calcolo uscita
-        out = net(Variable(data_batch))
+        out = net(Variable(data_batch).cuda())
         #loss back
-        loss_value = loss(out,label_batch)
+        loss_value = loss(out,Variable(label_batch,requires_grad=True).cuda())
         loss_value.backward()
         optimizer.step()
         # LOGGING
@@ -170,11 +182,25 @@ for i in xrange(num_epochs):
                         )
         if j %logging_image_step == 0:
             net.eval()
-            out = net(Variable(data_batch))
+            #drawn dal test
+            sample= loader_test.__iter__().next()
+            data_batch = sample["data"].float()
+            data_batch = data_batch.view((data_batch.size()[0] * data_batch.size()[1],) + data_batch.size()[2:])
+            label_batch = sample["label"]
+            label_batch = label_batch.view(label_batch.numel())
+
+            out = net(Variable(data_batch).cuda())
             p = PCA(n_components=3)
             out_pca = p.fit_transform(out.data.cpu().numpy())
-
-            add_embedding(torch.FloatTensor(out_pca),save_path='runs/{}'.format(writer_name),metadata=[k.data.numpy()[0]  for k in label_batch ])
+            imgs = sample["data"]
+            imgs = imgs.view(imgs.size()[0] * imgs.size()[1], 1, imgs.size()[3], imgs.size()[4]).cpu()
+            grid = make_grid(imgs, nrow=5)
+            grid = grid.permute(1,2,0)
+            print label_batch
+            pyplot.imshow(grid.numpy())
+            pyplot.show()
+            add_embedding(torch.FloatTensor(out_pca),save_path='runs/{}'.format(writer_name),metadata=label_batch,label_img=data_batch)
+            exit()
         # imgs = sample["data"]
         # imgs = imgs.view(imgs.size()[0] * imgs.size()[1], 1, imgs.size()[3], imgs.size()[4]).cpu()
         # grid = make_grid(imgs, nrow=5)

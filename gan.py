@@ -165,8 +165,8 @@ net.batch_real = False
 writer.add_graph(net, net(Variable(torch.randn(1,100), requires_grad=True).cuda()))
 
 batch_number = len(loader)
-num_epochs = 10
-num_epochs_pretrain = 4
+num_epochs = 50
+num_epochs_pretrain = 7
 logging_step = 50
 logging_image_step = 25
 widgets = [
@@ -244,6 +244,7 @@ for i in xrange(num_epochs):
         net.batch_real = False
         # genero rumore
         noise_len= numpy.random.randint(4,len(data_batch)*2)
+        noise_len = len(data_batch)
         data_batch = Variable(torch.randn(noise_len,100), requires_grad=True).cuda()
         # calcolo uscita
         out_fake = net(data_batch)
