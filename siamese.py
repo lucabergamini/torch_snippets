@@ -130,6 +130,42 @@ class N_pairLoss(Module):
 
         return value
 
+class ConstrastLoss(Module):
+    """
+    calcola una loss che dovrebbe portare vicini elementi della stessa classe
+    fa un test su tutte le coppie possibili
+    """
+
+    def __init__(self, margin=0.1):
+        super(ConstrastLoss, self).__init__()
+        self.margin = margin
+
+    def forward(self, out, labels):
+        """
+        :param out: vettore uscita Bx128
+        :param labels: vettore labels B
+        :return:
+        """
+        value = 0.0
+        for embedding, label in zip(out, labels):
+            # prendo tutti quelli della stessa classe
+            embedding_same_class = out[torch.nonzero(labels.data == label.data), :]
+            embedding_same_class = torch.squeeze(embedding_same_class, 1)
+            # prendo tutti quelli di altre classi
+            embedding_other_class = out[torch.nonzero(labels.data != label.data), :]
+            embedding_other_class = torch.squeeze(embedding_same_class, 1)
+            # calcolo distanze eclidee
+            dist_same = torch.norm(embedding_same_class - embedding)
+            dist_other = torch.norm(embedding_other_class - embedding)
+            value += torch.sum(dist_same)
+            other_margin = self.margin - dist_other
+            other_margin[other_margin < 0] = 0
+
+            value += torch.sum(other_margin ** 2)
+        value /= len(out)
+
+        return value
+
 #shuffle false qui e fondamentale
 #proviamo a cambiare altro
 loader = DataLoader(MNISTSiameseDataset("data/mnist.pkl",classes=[i for i in xrange(10)],num_elements_total=500,num_elements=8,epoch_len=1000),batch_size=5,shuffle=True)
@@ -140,7 +176,7 @@ optimizer = Adam(params=net.parameters(),lr=0.00025)
 #paraetri
 batch_number = len(loader)
 num_epochs = 100
-logging_step = 50
+logging_step = 25
 logging_image_step = 25
 widgets = [
     progressbar.DynamicMessage("epoch"), ' ',
@@ -178,6 +214,13 @@ for i in xrange(num_epochs):
                         loss=loss_value.data.cpu().numpy()[0],
                         epoch=i+1
                         )
+        if j % logging_step == 0:
+            #LOSS ACCURACY
+            writer.add_scalar('loss', loss_value.data[0], i*batch_number+j)
+            #PARAMS
+            for name, param in net.named_parameters():
+                writer.add_histogram(name, param.clone().cpu().data.numpy(), i*batch_number+j)
+
         if j %logging_image_step == 0:
             net.eval()
             #drawn dal test
@@ -191,7 +234,7 @@ for i in xrange(num_epochs):
             p = PCA(n_components=3)
             out_pca = p.fit_transform(out.data.cpu().numpy())
 
-            writer.add_embedding(mat=torch.FloatTensor(out_pca),metadata=label_batch,label_img=data_batch,global_step=(i*batch_number)+j)
+            writer.add_embedding(mat=torch.FloatTensor(out_pca),metadata=label_batch,label_img=data_batch,global_step=i*batch_number+j)
         # imgs = sample["data"]
         # imgs = imgs.view(imgs.size()[0] * imgs.size()[1], 1, imgs.size()[3], imgs.size()[4]).cpu()
         # grid = make_grid(imgs, nrow=5)
