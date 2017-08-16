@@ -2,7 +2,6 @@ import torch
 import numpy
 from datetime import datetime
 from tensorboard import SummaryWriter
-from tensorboard.embedding import add_embedding
 import progressbar
 import cPickle
 
@@ -134,7 +133,7 @@ class N_pairLoss(Module):
 #shuffle false qui e fondamentale
 #proviamo a cambiare altro
 loader = DataLoader(MNISTSiameseDataset("data/mnist.pkl",classes=[i for i in xrange(10)],num_elements_total=500,num_elements=8,epoch_len=1000),batch_size=5,shuffle=True)
-loader_test = DataLoader(MNISTSiameseDataset("data/mnist.pkl",classes=[i for i in xrange(10)],num_elements_total=500,num_elements=16,epoch_len=10),batch_size=10,shuffle=True)
+loader_test = DataLoader(MNISTSiameseDataset("data/mnist.pkl",classes=[i for i in xrange(10)],num_elements_total=500,num_elements=16,epoch_len=10),batch_size=10,shuffle=False)
 net = Net().cuda()
 loss = N_pairLoss()
 optimizer = Adam(params=net.parameters(),lr=0.00025)
@@ -154,7 +153,6 @@ widgets = [
 #logger
 writer_name = datetime.now().strftime('%B%d  %H:%M:%S')
 writer = SummaryWriter('runs/{}'.format(writer_name))
-
 for i in xrange(num_epochs):
     progress = progressbar.ProgressBar(min_value=0, max_value=batch_number, initial_value=0, widgets=widgets).start()
 
@@ -192,15 +190,8 @@ for i in xrange(num_epochs):
             out = net(Variable(data_batch).cuda())
             p = PCA(n_components=3)
             out_pca = p.fit_transform(out.data.cpu().numpy())
-            imgs = sample["data"]
-            imgs = imgs.view(imgs.size()[0] * imgs.size()[1], 1, imgs.size()[3], imgs.size()[4]).cpu()
-            grid = make_grid(imgs, nrow=5)
-            grid = grid.permute(1,2,0)
-            print label_batch
-            pyplot.imshow(grid.numpy())
-            pyplot.show()
-            add_embedding(torch.FloatTensor(out_pca),save_path='runs/{}'.format(writer_name),metadata=label_batch,label_img=data_batch)
-            exit()
+
+            writer.add_embedding(mat=torch.FloatTensor(out_pca),metadata=label_batch,label_img=data_batch,global_step=(i*batch_number)+j)
         # imgs = sample["data"]
         # imgs = imgs.view(imgs.size()[0] * imgs.size()[1], 1, imgs.size()[3], imgs.size()[4]).cpu()
         # grid = make_grid(imgs, nrow=5)
