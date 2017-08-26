@@ -13,4 +13,4 @@ Just some Pytorch snippets.
 - potrebbe essere lento
 - alcuni problemi di visualizzazione del grafo in tensorboard
 - non ha il logger, va scritto con progressbar (già fatto)
-- ha un sistema di scruttura dei layer poco scalabile 
+- ~~ha un sistema di scruttura dei layer poco scalabile~~
