@@ -14,3 +14,10 @@ Just some Pytorch snippets.
 - alcuni problemi di visualizzazione del grafo in tensorboard
 - non ha il logger, va scritto con progressbar (già fatto)
 - ~~ha un sistema di scruttura dei layer poco scalabile~~
+
+## BEST PRACTICES
+- usa programmazione ad oggetti per blocchi
+- se un blocco è sequenziale eredita da Sequential
+- quando tutto funziona usa inplace su ReLU per diminuire uso memoria
+- ModuleList equivale ad aggiungere moduli e chiamarli con children
+- Visto che ti servono le dimensioni calcolale nell init e falle fluire
