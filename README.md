@@ -21,3 +21,6 @@ Just some Pytorch snippets.
 - quando tutto funziona usa inplace su ReLU per diminuire uso memoria
 - ModuleList equivale ad aggiungere moduli e chiamarli con children
 - Visto che ti servono le dimensioni calcolale nell init e falle fluire
+
+``` self.layer1 =  nn.Sequential(*list(model.children())[:k[0]]) ```
+questo permette di avere accesso all intermedio, quindi devo fare subclass
