@@ -107,7 +107,7 @@ class Encoder(nn.Module):
     Blocco encoder
     """
 
-    def __init__(self, input_inter_sizes, input_size):
+    def __init__(self, input_inter_sizes, input_size,k=48):
         """
         :param input_inter_sizes: dimensioni input inter-link da decoder
         :param input_size: dimensione input
@@ -118,18 +118,18 @@ class Encoder(nn.Module):
         init_size = input_size
         init_size += input_inter_sizes[0]
 
-        self.conv_layer_0 = ConvLayer(in_channels=init_size, out_channels=48)
-        init_size += 48
-        self.conv_layer_1 = ConvLayer(in_channels=init_size, out_channels=48)
-        init_size += 48
+        self.conv_layer_0 = ConvLayer(in_channels=init_size, out_channels=k)
+        init_size += k
+        self.conv_layer_1 = ConvLayer(in_channels=init_size, out_channels=k)
+        init_size += k
         self.comp_layer_0 = CompressionLayer(in_channels=init_size, out_channels=768)
 
         init_size = 768+ input_inter_sizes[1]
 
-        self.conv_layer_2 = ConvLayer(in_channels=init_size, out_channels=48)
-        init_size += 48
-        self.conv_layer_3 = ConvLayer(in_channels=init_size, out_channels=48)
-        init_size += 48
+        self.conv_layer_2 = ConvLayer(in_channels=init_size, out_channels=k)
+        init_size += k
+        self.conv_layer_3 = ConvLayer(in_channels=init_size, out_channels=k)
+        init_size += k
         self.comp_layer_1 = CompressionLayer(in_channels=init_size, out_channels=1024)
 
         self.output_size= 1024
@@ -180,7 +180,7 @@ class Decoder(nn.Module):
     Blocco decoder
     """
 
-    def __init__(self, input_inter_sizes, input_size):
+    def __init__(self, input_inter_sizes, input_size,k=48):
         """
         :param input_inter_sizes: dimensioni input inter-link da primo encoder DENSENET
         :param input_size: dimensione input
@@ -194,10 +194,10 @@ class Decoder(nn.Module):
         self.deconv_0 = nn.ConvTranspose2d(in_channels=init_size, out_channels=init_size, kernel_size=(2, 2), stride=2)
         init_size += input_inter_sizes[0]
 
-        self.conv_layer_0 = ConvLayer(in_channels=init_size, out_channels=48)
-        init_size += 48
-        self.conv_layer_1 = ConvLayer(in_channels=init_size, out_channels=48)
-        init_size += 48
+        self.conv_layer_0 = ConvLayer(in_channels=init_size, out_channels=k)
+        init_size += k
+        self.conv_layer_1 = ConvLayer(in_channels=init_size, out_channels=k)
+        init_size += k
         self.comp_layer_0 = CompressionLayer(in_channels=init_size, out_channels=768)
         init_size = 768
         self.class_1 = ClassificationLayer(in_channels=init_size,num_classes=50,up_sample=8)
@@ -206,10 +206,10 @@ class Decoder(nn.Module):
         self.deconv_1 = nn.ConvTranspose2d(in_channels=init_size, out_channels=init_size, kernel_size=(2, 2), stride=2)
         init_size += input_inter_sizes[1]
 
-        self.conv_layer_2 = ConvLayer(in_channels=init_size, out_channels=48)
-        init_size += 48
-        self.conv_layer_3 = ConvLayer(in_channels=init_size, out_channels=48)
-        init_size += 48
+        self.conv_layer_2 = ConvLayer(in_channels=init_size, out_channels=k)
+        init_size += k
+        self.conv_layer_3 = ConvLayer(in_channels=init_size, out_channels=k)
+        init_size += k
         self.comp_layer_1 = CompressionLayer(in_channels=init_size, out_channels=576)
         init_size = 576
         self.class_2 = ClassificationLayer(in_channels=init_size,num_classes=50,up_sample=4)
@@ -270,20 +270,20 @@ class Decoder(nn.Module):
 
 
 class SDN(nn.Module):
-    def __init__(self):
+    def __init__(self,k=48):
         super(SDN, self).__init__()
         #primo encoder DENSENET
-        self.enc_0 = DenseNet(k=48,in_features=3,layers=(6,12))
+        self.enc_0 = DenseNet(k=k,in_features=3,layers=(6,12))
         # ho i due filtri convolutivi
-        self.conv_filters = nn.ModuleList([ConvLayer(in_channels=self.enc_0.output_size_denset[0],out_channels=48, drop=False),
-                        ConvLayer(in_channels=self.enc_0.output_size_denset[1],out_channels=48, drop=False)])
-        self.dec_0 = Decoder(input_inter_sizes=(48,48),input_size=self.enc_0.output_size)
+        self.conv_filters = nn.ModuleList([ConvLayer(in_channels=self.enc_0.output_size_denset[0],out_channels=k, drop=False),
+                        ConvLayer(in_channels=self.enc_0.output_size_denset[1],out_channels=k, drop=False)])
+        self.dec_0 = Decoder(input_inter_sizes=(k,k),input_size=self.enc_0.output_size,k=k)
 
-        self.enc_1 = Encoder(input_inter_sizes=self.dec_0.output_size_encoder,input_size=self.dec_0.output_size)
-        self.dec_1 = Decoder(input_inter_sizes=(48,48),input_size=self.enc_1.output_size)
+        self.enc_1 = Encoder(input_inter_sizes=self.dec_0.output_size_encoder[::-1],input_size=self.dec_0.output_size,k=k)
+        self.dec_1 = Decoder(input_inter_sizes=(k,k),input_size=self.enc_1.output_size,k=k)
 
-        self.enc_2 = Encoder(input_inter_sizes=self.dec_1.output_size_encoder, input_size=self.dec_0.output_size)
-        self.dec_2 = Decoder(input_inter_sizes=(48, 48), input_size=self.enc_2.output_size)
+        self.enc_2 = Encoder(input_inter_sizes=self.dec_1.output_size_encoder[::-1], input_size=self.dec_0.output_size,k=k)
+        self.dec_2 = Decoder(input_inter_sizes=(k, k), input_size=self.enc_2.output_size,k=k)
 
 
 
@@ -297,13 +297,12 @@ class SDN(nn.Module):
         ten,output_dencoder_for_encoder,output_classification=self.dec_0(ten,output_densenet_for_decoder[::-1])
         output_classification_final.append(output_classification)
         print "1"
-        exit()
-        ten = self.enc_1(ten,output_dencoder_for_encoder)
-        ten, output_dencoder_for_encoder, output_classification = self.dec_1(ten, output_densenet_for_decoder)
+        ten = self.enc_1(ten,output_dencoder_for_encoder[::-1])
+        ten, output_dencoder_for_encoder, output_classification = self.dec_1(ten, output_densenet_for_decoder[::-1])
         output_classification_final.append(output_classification)
         print "2"
-        ten = self.enc_2(ten,output_dencoder_for_encoder)
-        ten, output_dencoder_for_encoder, output_classification = self.dec_2(ten, output_densenet_for_decoder)
+        ten = self.enc_2(ten,output_dencoder_for_encoder[::-1])
+        ten, output_dencoder_for_encoder, output_classification = self.dec_2(ten, output_densenet_for_decoder[::-1])
         output_classification_final.append(output_classification)
 
         return output_classification_final
@@ -312,7 +311,7 @@ class SDN(nn.Module):
         super(SDN,self).__call__(*args,**kwargs)
 
 
-net = SDN()
+net = SDN(k=48).cuda()
 print "net done"
-a = Variable(torch.randn(2,3,224,224))
+a = Variable(torch.randn(8,3,224,224)).cuda()
 net(a)

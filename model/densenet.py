@@ -11,6 +11,10 @@ import progressbar
 
 
 class ConvLayer(nn.Module):
+    """
+    blocco convolutivo
+    se compress e True esegue compressione prima della convoluzione atraverso un filtro convolutivo 1x1
+    """
     def __init__(self, in_features, k, compress=True):
         super(ConvLayer, self).__init__()
         self.compress = compress
@@ -29,7 +33,6 @@ class ConvLayer(nn.Module):
 
     def forward(self, ten):
         if self.compress:
-            ten_init = ten
             ten = self.bn_0(ten)
             ten = F.relu(ten,inplace=True)
             ten = self.conv_0(ten)
@@ -38,13 +41,11 @@ class ConvLayer(nn.Module):
             ten = self.conv_1(ten)
             ten = F.dropout(ten, p=0.2, training=self.training)
         else:
-            ten_init = ten
             ten = self.bn_0(ten)
             ten = F.relu(ten, inplace=True)
             ten = self.conv_0(ten)
             ten = F.dropout(ten, p=0.2, training=self.training)
-
-        return torch.cat((ten,ten_init),1)
+        return ten
 
 
 class DenseBlock(nn.Module):
@@ -57,13 +58,18 @@ class DenseBlock(nn.Module):
 
     def forward(self, ten):
         for m in self.children():
+            ten_input = ten
             ten = m(ten)
+            ten = torch.cat((ten,ten_input),1)
         return ten
     def __call__(self, *args, **kwargs):
         return super(DenseBlock,self).__call__(*args,**kwargs)
 
 
 class TransitionLayer(nn.Module):
+    """
+    dimezza dimensione spaziale, se half True dimezza anche quella dei filtri
+    """
     def __init__(self, in_features, half = True):
         super(TransitionLayer, self).__init__()
         self.bn_0 = nn.BatchNorm2d(num_features=in_features)
@@ -105,6 +111,7 @@ class DenseNet(nn.Module):
 
         :param k: filtri convolutivi
         :param layers: quanti blocchi mettere e quanti filtri in ognuno
+        :param imagenet: se True applica una convoluzione 7x7 stride 2 e un maxpool iniziale, per ridurre overhead
         """
         super(DenseNet, self).__init__()
         # convoluzione iniziale
@@ -146,12 +153,10 @@ class DenseNet(nn.Module):
                 module.bias.data.zero_()
 
     def forward(self, ten):
-        #ten_outputs = []
 
         for block in self.blocks_pre:
             ten = block(ten)
         for block_dense,block_tran in zip(self.blocks_dense,self.blocks_tran):
             ten = block_dense(ten)
-            #ten_outputs.append(ten)
             ten = block_tran(ten)
         return ten
