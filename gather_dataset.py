@@ -22,10 +22,10 @@ for folder in folders:
     base_labels_clean = os.path.join(folder,"labels_clean")
     base_labels_raw = os.path.join(folder,"labels_raw")
 
-    data = [os.path.join(base_data,i) for i in os.listdir(base_data)]
-    labels_raw = [os.path.join(base_labels_raw,i) for i in os.listdir(base_labels_raw)]
-    labels_clean =  [os.path.join(base_labels_clean,i) for i in os.listdir(base_labels_clean)]
-    labels = [os.path.join(base_labels,i) for i in os.listdir(base_labels)]
+    data = [os.path.join(base_data,i) for i in sorted(os.listdir(base_data))]
+    labels_raw = [os.path.join(base_labels_raw,i) for i in sorted(os.listdir(base_labels_raw))]
+    labels_clean =  [os.path.join(base_labels_clean,i) for i in sorted(os.listdir(base_labels_clean))]
+    labels = [os.path.join(base_labels,i) for i in sorted(os.listdir(base_labels))]
     for d,l,lr,lc in zip(data,labels,labels_raw,labels_clean):
         shutil.copy(d,os.path.join(DEST_DATA,"{}.png".format(index)))
         shutil.copy(l,os.path.join(DEST_LABELS,"{}.png".format(index)))
