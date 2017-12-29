@@ -4,8 +4,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 import torch.nn.functional as F
 from torch.autograd import Variable
-import cPickle
-from tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 from torch.optim import SGD, Adam,RMSprop
 from torch.optim.lr_scheduler import StepLR,MultiStepLR
 import progressbar
@@ -121,27 +120,27 @@ if __name__ == "__main__":
 
     writer = SummaryWriter(comment="_LAPIS")
 
-    net = Tiramisu(in_features=3,num_classes=25,layers=(4,5,7,10),bottleneck=15,compress=False).cuda()
-    print "net done"
+    net = Tiramisu(in_features=3,num_classes=25,layers=(4,5,7,10),bottleneck=15,compress=False,batchnorm=False).cuda()
     # DATASET
     TEST = True
-    dataset = LAPIS("/home/lapis-ml/Desktop/LAPIS_dataset/train_2/data/", "/home/lapis-ml/Desktop/LAPIS_dataset/train_2/labels/",data_aug=True,reshape=False)
+    dataset = LAPIS("/home/lapis/Desktop/LAPIS-dataset/data/train_1/data/", "/home/lapis/Desktop/LAPIS-dataset/data/train_1/labels/",data_aug=True,reshape=False)
 
     loader = DataLoader(dataset,batch_size=3,shuffle=True)
 
-    dataset = LAPIS("/home/lapis-ml/Desktop/LAPIS_dataset/test_2/data/", "/home/lapis-ml/Desktop/LAPIS_dataset/test_2/labels/",data_aug=True,reshape=False)
+    dataset = LAPIS("/home/lapis/Desktop/LAPIS-dataset/data/test_1/data/", "/home/lapis/Desktop/LAPIS-dataset/data/test_1/labels/",data_aug=True,reshape=False)
     loader_test_plain = DataLoader(dataset,batch_size=3,shuffle=False)
 
-    dataset = LAPIS("/home/lapis-ml/Desktop/LAPIS_dataset/test_2/data/", "/home/lapis-ml/Desktop/LAPIS_dataset/test_2/labels/",data_aug=False,reshape=True)
+    dataset = LAPIS("/home/lapis/Desktop/LAPIS-dataset/data/test_1/data/", "/home/lapis/Desktop/LAPIS-dataset/data/test_1/labels/",data_aug=False,reshape=True)
     loader_test_reshape = DataLoader(dataset,batch_size=3,shuffle=False)
 
     # OPTIM-LOSS
-    #ottimo per ora con lr=0.0008 e step=1000 con gamma=0.5
-    optimizer = Adam(params=net.parameters(), lr=0.008)
+    optimizer = Adam(params=net.parameters(), lr=0.002)
+    #optimizer = Adam(params=net.parameters(), lr=0.0008)
     #lr_schedul = StepLR(optimizer,step_size=1000,gamma=0.5)
     #questo andava bene su 300 immagini con lr 0.008 e 350 epoche
     #lr_schedul = MultiStepLR(optimizer,milestones=[150,200,250,300],gamma=0.5)
-    lr_schedul = MultiStepLR(optimizer,milestones=[15,20,25,30,60],gamma=0.5)
+    #lr_schedul = MultiStepLR(optimizer,milestones=[15,20,25,30,60],gamma=0.5)
+    lr_schedul = MultiStepLR(optimizer,milestones=[5,10,15,20,25],gamma=0.5)
     #lr_schedul = StepLR(optimizer,step_size=100,gamma=1)
     loss = nn.NLLLoss2d(weight=torch.FloatTensor(WEIGHTS)).cuda()
     #modelcheck
@@ -149,7 +148,7 @@ if __name__ == "__main__":
     batch_number = len(loader)
 
     #num_epochs = 1000
-    num_epochs = 100
+    num_epochs = 30
     step_index=0
     widgets = [
 
@@ -164,7 +163,7 @@ if __name__ == "__main__":
         progressbar.DynamicMessage("epoch")
     ]
 
-    for i in xrange(num_epochs):
+    for i in range(num_epochs):
         progress = progressbar.ProgressBar(min_value=0, max_value=batch_number, initial_value=0, widgets=widgets).start()
         accuracy_mean = RollingMeasure()
         loss_mean = RollingMeasure()

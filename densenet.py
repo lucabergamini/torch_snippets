@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset,DataLoader
 import torch.nn.functional as F
 from torch.autograd import Variable
-import cPickle
+import _pickle
 from tensorboard import SummaryWriter
 from torch.optim import SGD,Adam
 import progressbar
@@ -35,7 +35,7 @@ class DenseBlock(nn.Module):
         super(DenseBlock, self).__init__()
         #lista moduli
         self.ml = nn.ModuleList()
-        for i in xrange(num_layers):
+        for i in range(num_layers):
             self.ml.append(ConvLayer(in_features=in_features,k=k))
             #self.add_module("conv_{}".format(i),ConvLayer(in_features=in_features,k=k))
             in_features += k
@@ -119,13 +119,13 @@ class DenseNet(nn.Module):
 
 class CIFAR(Dataset):
     def __init__(self):
-        dict = cPickle.load(open("data/cifar100"))
+        dict = _pickle.load(open("data/cifar100"))
         data = dict["data"].astype("float32")
         #ogni immagine e una riga
         #i canali sono messi uno in coda all altro
         #li normalizzo
         channels = []
-        for i in xrange(3):
+        for i in range(3):
             channel = data[:,1024*i:1024*(i+1)]
             channel = (channel - numpy.mean(channel)) / numpy.std(channel)
             channel = channel[:, numpy.newaxis]
@@ -155,7 +155,7 @@ def classification_accuracy(out,labels):
 
 
 
-writer = SummaryWriter()
+writer = SummaryWriter("runs")
 net = DenseNet(in_features=3,k=12,layers=[32,32,32]).cuda()
 #DATASET
 dataset = CIFAR()
@@ -184,7 +184,7 @@ widgets = [
     progressbar.DynamicMessage("epoch")
     ]
 
-for i in xrange(num_epochs):
+for i in range(num_epochs):
     progress = progressbar.ProgressBar(min_value=0, max_value=batch_number, initial_value=0,widgets=widgets).start()
 
     # sistemo lr dividendo per 10 a 1/2 e 2/3

@@ -3,7 +3,7 @@ import numpy
 import torch.nn as nn
 import torch.nn.functional as F
 
-from densenet import DenseBlock, TransitionLayer
+from sdn.densenet import DenseBlock, TransitionLayer
 
 
 class UpLayer(nn.Module):
@@ -16,7 +16,7 @@ class UpLayer(nn.Module):
 
 
 class Tiramisu(nn.Module):
-    def __init__(self, in_features=3, num_classes=10, layers=(4, 5, 7, 10, 12), bottleneck=15, compress=False):
+    def __init__(self, in_features=3, num_classes=10, layers=(4, 5, 7, 10, 12), bottleneck=15, compress=False,batchnorm=True):
         super(Tiramisu, self).__init__()
         # convoluzione iniziale
         self.conv_0 = nn.Conv2d(in_channels=in_features, out_channels=48, kernel_size=3, padding=1)
@@ -28,15 +28,15 @@ class Tiramisu(nn.Module):
         # DOWN
         for l in layers:
             # print init_size
-            block = DenseBlock(in_features=init_size, num_layers=l, k=16, compress=compress)
+            block = DenseBlock(in_features=init_size, num_layers=l, k=16, compress=compress,batchnorm=batchnorm)
             self.down_dense.append(block)
             init_size = block.out_features
-            block = TransitionLayer(in_features=init_size, half=False)
+            block = TransitionLayer(in_features=init_size, half=False,batchnorm=batchnorm)
             self.down_tran.append(block)
         # bottleneck
         # da qui sego della roba in output e quindi mi serve mantere dei temporanei
         init_size_temp = init_size
-        self.bottle = DenseBlock(in_features=init_size, num_layers=bottleneck, k=16, compress=compress)
+        self.bottle = DenseBlock(in_features=init_size, num_layers=bottleneck, k=16, compress=compress,batchnorm=batchnorm)
         # print self.bottle.out_features
         init_size = self.bottle.out_features - init_size_temp
 
@@ -46,7 +46,7 @@ class Tiramisu(nn.Module):
             init_size += self.down_dense[len(self.down_dense) - i - 1].out_features
             self.up_tran.append(block)
             init_size_temp = init_size
-            block = DenseBlock(in_features=init_size, num_layers=l, k=16, compress=compress)
+            block = DenseBlock(in_features=init_size, num_layers=l, k=16, compress=compress,batchnorm=batchnorm)
             # print block.out_features
             if i < len(layers) - 1:
                 init_size = block.out_features - init_size_temp
@@ -93,6 +93,6 @@ class Tiramisu(nn.Module):
 
         ten = self.classification_conv(ten)
 
-        # adesso sara batchx224x224xnum_classes
-        ten = F.log_softmax(ten)
+        # adesso sara batchxnum_classesx224x224
+        ten = F.log_softmax(ten,1)
         return ten

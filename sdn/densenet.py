@@ -4,42 +4,41 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
 from torch.autograd import Variable
-import cPickle
-from tensorboard import SummaryWriter
-from torch.optim import SGD, Adam
-import progressbar
 
 
 class ConvLayer(nn.Module):
-    def __init__(self, in_features, k, compress=True):
+    def __init__(self, in_features, k, compress=True,batchnorm=True):
         super(ConvLayer, self).__init__()
         self.compress = compress
+        self.batchnorm = batchnorm
         if compress:
             # bn
-            self.bn_0 = nn.BatchNorm2d(num_features=in_features)
-            self.bn_1 = nn.BatchNorm2d(num_features=4 * k)
+            if batchnorm:
+                self.bn_0 = nn.BatchNorm2d(num_features=in_features)
+                self.bn_1 = nn.BatchNorm2d(num_features=4 * k)
             # conv
             self.conv_0 = nn.Conv2d(in_channels=in_features, out_channels=4 * k, kernel_size=1, padding=0,bias=False)
             self.conv_1 = nn.Conv2d(in_channels=4 * k, out_channels=k, kernel_size=3, padding=1,bias=False)
         else:
             # bn
-            self.bn_0 = nn.BatchNorm2d(num_features=in_features)
+            if batchnorm:
+                self.bn_0 = nn.BatchNorm2d(num_features=in_features)
             # conv
             self.conv_0 = nn.Conv2d(in_channels=in_features, out_channels=k, kernel_size=3, padding=1,bias=False)
 
     def forward(self, ten):
         if self.compress:
             ten_init = ten
-            ten = self.bn_0(ten)
+            ten = ten if not self.batchnorm else self.bn_0(ten)
             ten = F.relu(ten,inplace=True)
             ten = self.conv_0(ten)
-            ten = self.bn_1(ten)
+            ten = ten if not self.batchnorm else self.bn_1(ten)
             ten = F.relu(ten,inplace=True)
             ten = self.conv_1(ten)
             ten = F.dropout(ten, p=0.2, training=self.training)
         else:
             ten_init = ten
-            ten = self.bn_0(ten)
+            ten = ten if not self.batchnorm else self.bn_0(ten)
             ten = F.relu(ten, inplace=True)
             ten = self.conv_0(ten)
             ten = F.dropout(ten, p=0.2, training=self.training)
@@ -48,10 +47,10 @@ class ConvLayer(nn.Module):
 
 
 class DenseBlock(nn.Module):
-    def __init__(self, in_features, num_layers, k,compress = True):
+    def __init__(self, in_features, num_layers, k,compress = True,batchnorm=True):
         super(DenseBlock, self).__init__()
-        for i in xrange(num_layers):
-            self.add_module("conv_{}".format(i),ConvLayer(in_features=in_features,k=k,compress= compress))
+        for i in range(num_layers):
+            self.add_module("conv_{}".format(i),ConvLayer(in_features=in_features,k=k,compress= compress,batchnorm=batchnorm))
             in_features += k
         self.out_features = in_features
 
@@ -64,9 +63,11 @@ class DenseBlock(nn.Module):
 
 
 class TransitionLayer(nn.Module):
-    def __init__(self, in_features, half = True):
+    def __init__(self, in_features, half = True,batchnorm=True):
         super(TransitionLayer, self).__init__()
-        self.bn_0 = nn.BatchNorm2d(num_features=in_features)
+        self.batchnorm = batchnorm
+        if batchnorm:
+            self.bn_0 = nn.BatchNorm2d(num_features=in_features)
         if half:
             self.conv_0 = nn.Conv2d(in_channels=in_features, out_channels=in_features//2, kernel_size=1,bias=False)
         else:
@@ -74,7 +75,7 @@ class TransitionLayer(nn.Module):
                                         bias=False)
 
     def forward(self, ten):
-        ten = self.bn_0(ten)
+        ten = ten if not self.batchnorm else self.bn_0(ten)
         ten = F.relu(ten,inplace=True)
         ten = self.conv_0(ten)
         ten = F.avg_pool2d(input=ten, kernel_size=2, stride=2)
@@ -82,14 +83,15 @@ class TransitionLayer(nn.Module):
 
 
 class ClassificationLayer(nn.Module):
-    def __init__(self, in_features, num_classes):
+    def __init__(self, in_features, num_classes,batchnorm=True):
         super(ClassificationLayer, self).__init__()
-        self.bn_0 = nn.BatchNorm2d(num_features=in_features)
+        if batchnorm:
+            self.bn_0 = nn.BatchNorm2d(num_features=in_features)
         self.fc_0 = nn.Linear(in_features=in_features, out_features=num_classes)
 
     def forward(self, ten):
         ten = F.relu(ten,inplace=True)
-        ten = self.bn_0(ten)
+        ten = ten if not self.batchnorm else self.bn_0(ten)
         ten = F.avg_pool2d(ten, kernel_size=ten.size()[-2:])
         ten = self.fc_0(ten.view(len(ten), -1))
         ten = F.log_softmax(ten)

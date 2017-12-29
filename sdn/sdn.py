@@ -10,8 +10,8 @@ import progressbar
 import os
 from torch.autograd import Variable
 from torch.optim import Adam
-from tensorboard import SummaryWriter
-from densenet import DenseNet
+from tensorboardX import SummaryWriter
+from sdn.densenet import DenseNet
 
 
 class ConvLayer(nn.Module):

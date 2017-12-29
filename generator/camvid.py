@@ -88,10 +88,10 @@ if __name__ == "__main__":
 
     import time
 
-    for i in xrange(10):
+    for i in range(10):
         tick = time.time()
         a = gen.__iter__().next()
         exit()
-        print a
+        print(a)
         exit()
-        print time.time()-tick
+        print(time.time()-tick)

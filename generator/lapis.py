@@ -74,15 +74,23 @@ class LAPIS(Dataset):
         # qui dipende se ho data aug o no
         if self.data_aug:
             #prendo un area variabile e faccio il resize a 224x224
+            #conviene avere circa dei quadrati, quindi vincolo le due dimensioni ad essere piu o meno simili
+            #cosi non distorce troppo le due dimensioni
+            size = numpy.random.randint(85,min(data.shape[1],data.shape[0]))
+            x = numpy.random.randint(0, data.shape[1] - size)
+            y = numpy.random.randint(0, data.shape[0] - size)
+            # crop
+            data = data[y:y + size, x:x + size]
+            label = label[y:y + size, x:x + size]
 
-            width = numpy.random.randint(100,data.shape[1])
-            height = numpy.random.randint(100,data.shape[0])
+            #width = numpy.random.randint(100,data.shape[1])
+            #height = numpy.random.randint(100,data.shape[0])
 
-            x = numpy.random.randint(0,data.shape[1]-width)
-            y = numpy.random.randint(0,data.shape[0]-height)
+            #x = numpy.random.randint(0,data.shape[1]-width)
+            #y = numpy.random.randint(0,data.shape[0]-height)
             #crop
-            data = data[y:y+height, x:x+width]
-            label = label[y:y+height, x:x+width]
+            #data = data[y:y+height, x:x+width]
+            #label = label[y:y+height, x:x+width]
             #resize
             data = cv2.resize(data, (224, 224))
             label = cv2.resize(label, (224, 224),interpolation=cv2.INTER_NEAREST)
@@ -106,5 +114,5 @@ if __name__ == "__main__":
     from matplotlib import pyplot
     import time
 
-    for i in xrange(10):
+    for i in range(10):
         a = gen.__iter__().next()

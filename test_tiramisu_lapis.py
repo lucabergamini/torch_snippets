@@ -6,6 +6,9 @@ import numpy
 import cv2
 from matplotlib import pyplot
 from collections import OrderedDict
+from generator.lapis import LAPIS
+from torch.utils.data import DataLoader
+from torchvision.utils import make_grid
 
 def from_classes_to_color(batch_array):
     """
@@ -102,32 +105,59 @@ colors = OrderedDict(colors)
 
 
 model = Tiramisu(in_features=3,num_classes=25,layers=(4,5,7,10),bottleneck=15,compress=False).cuda()
-model.load_state_dict(torch.load("models/Oct20_15-21-29_lapis-ml/Oct21_13-03-09_0.0360020418404_"))
+model.load_state_dict(torch.load("models/Nov02_17-57-47_lapis-ml/Nov03_03-52-09_0.0505296368858_"))
 model.eval()
 #batch_norm fa andare tutto a merda
 [i.train() for i in model.modules() if isinstance(i,BatchNorm2d)]
+LIVE = False
+if LIVE:
+    cam = cv2.VideoCapture(0)
+    while True:
+        ret_val, img = cam.read()
+        img = cv2.bilateralFilter(img,d=3,sigmaColor=1,sigmaSpace=1)
 
-cam = cv2.VideoCapture(0)
-while True:
-    ret_val, img = cam.read()
+        cv2.imshow('my webcam_original', numpy.copy(img))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    cv2.imshow('my webcam_original', numpy.copy(img))
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.resize(img, (224, 224))
+        img = img.astype("float32") / 255.0
+        img = numpy.transpose(img, (2, 0, 1))
 
-    img = cv2.resize(img, (224, 224))
-    img = img.astype("float32") / 255.0
-    img = numpy.transpose(img, (2, 0, 1))
+        data = Variable(torch.FloatTensor(img[numpy.newaxis, ...]).cuda(), volatile=True)
+        out = model(data)
+        _, out = torch.max(out, 1)
 
-    data = Variable(torch.FloatTensor(img[numpy.newaxis, ...]).cuda(), volatile=True)
-    out = model(data)
-    _, out = torch.max(out, 1)
+        out = numpy.squeeze(from_classes_to_color(out.data.cpu()))
+        out = numpy.transpose(out, (1, 2, 0))
 
-    out = numpy.squeeze(from_classes_to_color(out.data.cpu()))
-    out = numpy.transpose(out, (1, 2, 0))
+        cv2.imshow('my webcam', out.astype("uint8"))
+        if cv2.waitKey(1) == 27:
+            break  # esc to quit
+    cv2.destroyAllWindows()
+else:
+    dataset = LAPIS("/home/lapis/Desktop/LAPIS-dataset/data/test_1/data/", "/home/lapis/Desktop/LAPIS-dataset/data/test_1/labels/",data_aug=False,reshape=True)
+    loader_test_reshape = DataLoader(dataset,batch_size=3,shuffle=False)
 
-    cv2.imshow('my webcam', out.astype("uint8"))
-    if cv2.waitKey(1) == 27:
-        break  # esc to quit
-cv2.destroyAllWindows()
+    label_test_color = []
+    out_test_color = []
+    in_test_color = []
+    for k, (data_batch, labels_batch) in enumerate(loader_test_reshape):
+        #
+        data_batch = Variable(data_batch, requires_grad=False, volatile=True).float().cuda()
+        # calcolo uscita
+        out = model(data_batch)
+        _, out = torch.max(out, 1)
+        # LOG tensorboard
+        out_test_color.append(from_classes_to_color(out.data.cpu()))
+        break
+
+    grid = make_grid(torch.FloatTensor(numpy.concatenate(out_test_color)), nrow=5)
+    img = grid.numpy().astype("uint8")
+    img = numpy.transpose(img,(1,2,0))
+    pyplot.imshow(img)
+    pyplot.show()
+
+
+
 
 
